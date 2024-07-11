@@ -1,0 +1,115 @@
+#version 450
+
+//---- Workgroup Size ----//
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+//---- Resources ----//
+
+uniform ivec2 mapSize;
+uniform vec3 cameraPos;
+uniform vec3 cameraForwards;
+uniform vec3 cameraRight;
+
+layout (std430, binding = 0) readonly buffer mapBuffer {
+    int[] map;
+};
+
+layout (std430, binding = 1) readonly buffer materialBuffer {
+    vec4[] colors;
+};
+
+layout (std430, binding = 2) writeonly buffer castBuffer {
+    vec4[800] renderState;
+};
+
+//---- Functions ----//
+
+void main() {
+
+    //fetch ID and check against bounds
+    uint x = gl_GlobalInvocationID.x;
+    if (x >= 800) {
+        return;
+    }
+
+    float horizontalCoefficient = float(x) / 400.0 - 1;
+    float rayDirX = cameraForwards.x + cameraRight.x * horizontalCoefficient;
+    float rayDirY = cameraForwards.y + cameraRight.y * horizontalCoefficient;
+    
+    //which box of the map we're in
+    int mapX = int(cameraPos.x);
+    int mapY = int(cameraPos.y);
+
+    //length of ray from current position to next x or y-side
+    float sideDistX;
+    float sideDistY;
+
+    float deltaDistX = (rayDirX == 0) ? 1e30 : abs(1.0 / rayDirX);
+    float deltaDistY = (rayDirY == 0) ? 1e30 : abs(1.0 / rayDirY);
+
+    float perpWallDist;
+
+    //what direction to step in x or y-direction (either +1 or -1)
+    int stepX;
+    int stepY;
+
+    int side; //was a NS or a EW wall hit?
+
+    //calculate step and initial sideDist
+    if (rayDirX < 0) {
+        stepX = -1;
+        sideDistX = (cameraPos.x - mapX) * deltaDistX;
+    }
+    else {
+        stepX = 1;
+        sideDistX = (mapX + 1.0 - cameraPos.x) * deltaDistX;
+    }
+    if (rayDirY < 0) {
+        stepY = -1;
+        sideDistY = (cameraPos.y - mapY) * deltaDistY;
+    }
+    else {
+        stepY = 1;
+        sideDistY = (mapY + 1.0 - cameraPos.y) * deltaDistY;
+    }
+        
+    //perform DDA
+    while (true) {
+            
+        //jump to next map square, either in x-direction, or in y-direction
+        if (sideDistX < sideDistY) {
+            sideDistX += deltaDistX;
+            mapX += stepX;
+            side = 0;
+        }
+        else {
+            sideDistY += deltaDistY;
+            mapY += stepY;
+            side = 1;
+        }
+        
+        //Check if ray has hit a wall
+        if (map[mapX * mapSize.y + mapY] > 0) {
+            break;
+        }
+    }
+        
+    if (side == 0) {
+        perpWallDist = (sideDistX - deltaDistX);
+    }
+    else {
+        perpWallDist = (sideDistY - deltaDistY);
+    }
+
+    //choose wall color
+    vec3 color = colors[map[mapX * mapSize.y + mapY]].rgb;
+
+    //give x and y sides different brightness
+    if (side == 1) { 
+        color = 0.5 * color; 
+    }
+
+    //store result
+    renderState[x] = vec4(color, perpWallDist);
+}

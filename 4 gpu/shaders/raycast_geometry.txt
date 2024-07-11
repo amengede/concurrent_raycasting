@@ -1,0 +1,33 @@
+#version 450
+
+layout(points) in;
+layout(line_strip, max_vertices = 2) out;
+
+in int scanlineX[];
+
+layout (std430, binding = 2) readonly buffer castBuffer {
+    vec4[800] renderState;
+};
+
+out vec3 fragmentColor;
+
+void main()
+{
+    // gl_In = struct { gl_Position, gl_PointSize, gl_ClipDistance };
+
+    float x = float(scanlineX[0]) / 400.0 - 1.0;
+    vec4 payload = renderState[scanlineX[0]];
+    float wallHeight = min(1.0, 1.0 / payload.w);
+
+    //bottom
+    gl_Position = vec4(x, -wallHeight, 0.0, 1.0);
+    fragmentColor = payload.rgb;
+    EmitVertex();
+
+    //top
+    gl_Position = vec4(x, wallHeight, 0.0, 1.0);
+    fragmentColor = payload.rgb;
+    EmitVertex();
+
+    EndPrimitive();
+}
