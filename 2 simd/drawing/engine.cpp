@@ -62,10 +62,12 @@ void Engine::vertical_line(int x, int y1, int y2, uint32_t color){
 
     //get block indices and padding
     int pixel1 = y1 + height * x;
+    // rounding up to start from vertically lower pixels
     int block1 = (pixel1 + 7) / 8;
     int padding1 = 8 * block1 - pixel1;
 
     int pixel2 = y2 + height * x;
+    // rounding down to stop at vertically higher pixels
     int block2 = pixel2 / 8;
     int padding2 = pixel2 - 8 * block2;
 
